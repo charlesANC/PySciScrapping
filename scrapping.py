@@ -83,7 +83,7 @@ input_filename = sys.argv[1]
 output_filename = 'Output_' + input_filename
 
 if len(sys.argv) == 3:
-        output_filename = sys.argv[1]
+        output_filename = sys.argv[2]
 
 print('Reading', input_filename)
 
