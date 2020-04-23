@@ -10,21 +10,14 @@ from bs4 import BeautifulSoup
 import json
 
 
-def scrap_ieee_data(doi):
-    """
-        Gets a IEEE doi URL and returns a dict
-    """
-    paper_soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
-    paper_scripts = paper_soup_page.findAll('script', type='text/javascript')
+def scrap_json_from_scripts(soup_page, start_marker, end_marker):
+    paper_scripts = soup_page.findAll('script', type='text/javascript')
     
     for paper_script in paper_scripts:
         
         paper_script_text = paper_script.text
         
-        start_marker = 'global.document.metadata='
-        end_marker = ';'
-        
-        if start_marker in paper_script_text:
+        if start_marker in paper_script_text and end_marker in paper_script_text:
             
             start = paper_script_text.find(start_marker)+len(start_marker)
             end = paper_script_text.rfind(end_marker)
@@ -33,7 +26,15 @@ def scrap_ieee_data(doi):
             return json.loads(paper_json_text)
         
     return {}
-    
+
+
+def scrap_ieee_data(doi):
+    """
+        Gets a IEEE doi URL and returns a dict
+    """
+    paper_soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
+    return scrap_json_from_scripts(paper_soup_page, 'global.document.metadata=', ';')
+  
     
 def extract_from_ieee(doi):
     """
@@ -71,6 +72,68 @@ def extract_from_ieee(doi):
     
     return {}
 
+def extract_from_springer_science(doi):
+    soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
+
+    title = ''
+    abstract = ''
+    authors = ''
+    keywords = ''    
+    
+    title_tag = soup_page.find('meta', attrs={'name': 'dc.title'})
+    if title_tag: title = title_tag['content']
+
+    abstract_tag = soup_page.find('meta', attrs={'name' : 'dc.description'})
+    if abstract_tag: abstract = abstract_tag['content']
+
+    authors_tags = soup_page.find_all('meta', attrs={'name' : 'dc.creator'})
+    if authors_tags: authors = ', '.join([ x['content'] for x in authors_tags])
+
+    other_data = scrap_json_from_scripts(soup_page, 'window.dataLayer = [', '];')
+    if other_data: keywords = other_data['Keywords']
+
+    print('Springer', title, abstract, authors, keywords)
+
+    if title or abstract or authors or keywords:
+        return {
+            'doi': doi, 
+            'title': title, 
+            'authors': authors, 
+            'abstract': abstract, 
+            'keywords': keywords
+        }
+    
+    return {}
+
+def extract_from_springer_berlin(doi):
+    soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
+
+    title = ''
+    abstract = ''
+    authors = ''
+    keywords = ''        
+
+    title_tag = soup_page.find('meta', attrs={'name': 'citation_title'})
+    if title_tag: title = title_tag['content']
+
+    abstract_tag = soup_page.find('p', {'class' : 'Para'})
+    if abstract_tag: abstract = abstract_tag.text
+
+    authors_tags = soup_page.find_all('meta', attrs={'name' : 'citation_author'})
+    if authors_tags: authors = ', '.join([ x['content'] for x in authors_tags])
+
+    keywords_tags = soup_page.find_all('span', {'class': 'Keyword'})
+    if keywords_tags: keywords = ', '.join([ x.text for x in keywords_tags])
+
+    if title or abstract or authors or keywords:
+        return {
+            'doi': doi, 
+            'title': title, 
+            'authors': authors, 
+            'abstract': abstract, 
+            'keywords': keywords
+        }    
+
 """
     Goint to process CSV files
 """
@@ -101,11 +164,19 @@ for paper in input_data.T.to_dict().values():
     
     print('Scrapping data from', article_url, 'of', publisher)
     
-    if publisher == 'IEEE':
+    if 'IEEE' in publisher:
         paper_data = extract_from_ieee(article_url)
-        if paper_data: 
-            output_data.append(paper_data)
-           
+        if paper_data: output_data.append(paper_data)
+    elif 'Springer Science and Business' in publisher:
+        paper_data = extract_from_springer_science(article_url)
+        if paper_data: output_data.append(paper_data)    
+    elif 'Springer Berlin' in publisher:
+        paper_data = extract_from_springer_berlin(article_url)
+        print('*** from Berlin', paper_data)
+        if paper_data: output_data.append(paper_data)            
+    else:
+        print('Ignoring', publisher, '...')
+
 pd.DataFrame(output_data).to_csv(output_filename)
 
 print('Finished.')
