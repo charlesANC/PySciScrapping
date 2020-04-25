@@ -9,7 +9,6 @@ import requests
 from bs4 import BeautifulSoup
 import json
 
-
 def scrap_json_from_scripts(soup_page, start_marker, end_marker):
     paper_scripts = soup_page.findAll('script', type='text/javascript')
     
@@ -26,7 +25,6 @@ def scrap_json_from_scripts(soup_page, start_marker, end_marker):
             return json.loads(paper_json_text)
         
     return {}
-
 
 def scrap_ieee_data(doi):
     """
@@ -74,6 +72,9 @@ def extract_from_ieee(doi, publisher):
     return {}
 
 def extract_from_springer_science(doi, publisher):
+    """
+        This is for Springer Science.
+    """
     soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
 
     title = ''
@@ -106,6 +107,9 @@ def extract_from_springer_science(doi, publisher):
     return {}
 
 def extract_from_springer_internacional(doi, publisher):
+    """
+        This is for all papers from Springer but Springer Science.
+    """
     soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
 
     title = ''
@@ -135,9 +139,46 @@ def extract_from_springer_internacional(doi, publisher):
             'keywords': keywords
         }    
 
+    return {}
+
+def extract_from_acm(doi, publisher):
+    soup_page = BeautifulSoup(requests.get(doi).text, 'html.parser')
+    
+    title = ''
+    abstract = ''
+    authors = ''
+    keywords = ''            
+    
+    title_tag = soup_page.find('h1', {'class': 'citation__title'})
+    if title_tag: title = title_tag.text
+    
+    divs = soup_page.find_all('div')
+    for div in divs:
+        if div.has_attr('class') and 'abstractInFull' in div['class']:
+            abstract_tag = div.find('p')
+            if abstract_tag: abstract = abstract_tag.text
+                
+    authors_tags = soup_page.find_all('a', {'class': 'author-name'})
+    if authors_tags: authors = ', '.join(list(dict.fromkeys([x['title'] for x in authors_tags])))
+    
+    if title or abstract or authors or keywords:
+        return {
+            'publisher': publisher,
+            'doi': doi, 
+            'title': title, 
+            'authors': authors, 
+            'abstract': abstract, 
+            'keywords': keywords
+        }    
+            
+    return {}
+
 def extract_data(doi, publisher, scrapping_function, output):
-        paper_data = scrapping_function(doi, publisher)
-        if paper_data: output_data.append(paper_data)
+    """
+        Extract the structure and adds it to the output
+    """
+    paper_data = scrapping_function(doi, publisher)
+    if paper_data: output_data.append(paper_data)
 
 
 """
@@ -171,11 +212,13 @@ for paper in input_data.T.to_dict().values():
     print('Scrapping data from', article_url, 'of', publisher)
     
     if 'IEEE' in publisher: 
-        extract_data(article_url, publisher,  extract_from_ieee, output_data)
+        extract_data(article_url, publisher, extract_from_ieee, output_data)
     elif 'Springer Science and Business' in publisher:
-        extract_data(article_url, publisher,  extract_from_springer_science, output_data)        
+        extract_data(article_url, publisher, extract_from_springer_science, output_data)        
     elif 'Springer' in publisher:
-        extract_data(article_url, publisher,   extract_from_springer_internacional, output_data)                
+        extract_data(article_url, publisher, extract_from_springer_internacional, output_data)                
+    elif 'ACM' in publisher:
+        extract_data(article_url, publisher, extract_from_acm, output_data)                        
     else:
         print('Ignoring', publisher, '...')
 
