@@ -14,7 +14,7 @@ use: 'python scrapping.py input [output]'.
 
 Where:
 
-    input   - A CSV file exported from PoP.
-    
-    output  - Optional, a name for the output file. Will be used 'Output_'+input if omited.
+- input: A CSV file exported from PoP.
+
+- output: Optional, a name for the output file. Will be used 'Output_'+input if omited.
 
